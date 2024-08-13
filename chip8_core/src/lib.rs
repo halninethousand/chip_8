@@ -266,7 +266,7 @@ impl Emulator {
                     self.v_reg[0xF] = 0;
                 }
             },
-            (0xE, _, 9, 0xE)  => {        // SKIP if key press 
+            (0xE, _, 9, 0xE)  => {        // SKIP if key press
                 let x = digit2 as usize;
                 let vx = self.v_reg[x];
                 let key = self.keys[vx as usize];
@@ -274,7 +274,7 @@ impl Emulator {
                     self.pc += 2;
                 }
             },
-            (0xE, _, 0xA, 1)  => {        // SKIP if key not press 
+            (0xE, _, 0xA, 1)  => {        // SKIP if key not press
                 let x = digit2 as usize;
                 let vx = self.v_reg[x];
                 let key = self.keys[vx as usize];
@@ -286,7 +286,7 @@ impl Emulator {
                 let x = digit2 as usize;
                 self.v_reg[x] = self.dt;
             },
-            (0xF, _, 0, 0xA)  => {      // WAIT KEY 
+            (0xF, _, 0, 0xA)  => {      // WAIT KEY
                 let x = digit2 as usize;
                 let mut pressed = false;
                 for i in 0..self.keys.len() {
@@ -301,20 +301,20 @@ impl Emulator {
                     self.pc -= 2;
                 }
             },
-            (0xF, _, 1, 5)  => {        // DT = VX 
+            (0xF, _, 1, 5)  => {        // DT = VX
                 let x = digit2 as usize;
                 self.dt = self.v_reg[x];
             },
-            (0xF, _, 1, 8)  => {        // ST = VX 
+            (0xF, _, 1, 8)  => {        // ST = VX
                 let x = digit2 as usize;
                 self.st = self.v_reg[x];
             },
-            (0xF, _, 1, 0xE)  => {        // I += VX 
+            (0xF, _, 1, 0xE)  => {        // I += VX
                 let x = digit2 as usize;
                 let vx = self.v_reg[x] as u16;
                 self.i_reg = self.i_reg.wrapping_add(vx);
             },
-            (0xF, _, 2, 9)  => {        // I = FONT 
+            (0xF, _, 2, 9)  => {        // I = FONT
                 let x = digit2 as usize;
                 let c = self.v_reg[x] as u16;
                 self.i_reg = c * 5;
@@ -330,14 +330,14 @@ impl Emulator {
                 self.ram[(self.i_reg + 1) as usize] = tens;
                 self.ram[(self.i_reg + 2) as usize] = ones;
             },
-            (0xF, _, 5, 5)  => {        // V0 -> VX store into RAM 
+            (0xF, _, 5, 5)  => {        // V0 -> VX store into RAM
                 let x = digit2 as usize;
                 let i = self.i_reg as usize;
                 for idx in 0..=x {
                     self.ram[i + idx] = self.v_reg[idx];
                 }
             },
-            (0xF, _, 6, 5)  => {        // load V0 -> VX with some RAM stretch 
+            (0xF, _, 6, 5)  => {        // load V0 -> VX with some RAM stretch
                 let x = digit2 as usize;
                 let i = self.i_reg as usize;
                 for idx in 0..=x {
