@@ -1,3 +1,5 @@
+use rand::random;
+
 const RAM_SIZE: usize = 4096;
 const STACK_SIZE: usize = 16;
 const NUM_REGS: usize = 16;
@@ -101,14 +103,169 @@ impl Emulator {
         let digit4 = op & 0x000F;
 
         match (digit1, digit2, digit3, digit4) {
-            (0, 0, 0, 0)    => (),
+            (0, 0, 0, 0)    => (),      // nop
             (0, 0, 0xE, 0)  => {        // clear screen opcode
                 self.screen = [false; SCREEN_WIDTH * SCREEN_HEIGHT];
-            }
+            },
             (0, 0, 0xE, 0xE)  => {      // return from subroutine
                 let ret_addr = self.pop();
                 self.pc = ret_addr;
-            }
+            },
+            (1, _, _, _)  => {
+                let nnn = op & 0xFFF;   // JMP NNN
+                self.pc = nnn;
+            },
+            (2, _, _, _)  => {
+                let nnn = op & 0xFFF;   // CALL NNN
+                self.push(self.pc);
+                self.pc = nnn;
+            },
+            (3, _, _, _)  => {          // SKIP VX == NN
+                let x = digit2 as usize;
+                let nn = (op & 0xFF) as u8;
+                if self.v_reg[x] == nn {
+                    self.pc += 2;
+                }
+            },
+            (4, _, _, _)  => {          // SKIP VX != NN
+                let x = digit2 as usize;
+                let nn = (op & 0xFF) as u8;
+                if self.v_reg[x] != nn {
+                    self.pc += 2;
+                }
+            },
+            (5, _, _, 0)  => {          // SKIP VX == VY
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                if self.v_reg[x] != self.v_reg[y] {
+                    self.pc += 2;
+                }
+            },
+            (6, _, _, _)  => {          // VX = NN
+                let x = digit2 as usize;
+                let nn = (op & 0xFF) as u8;
+                self.v_reg[x] = nn;
+            },
+            (7, _, _, _)  => {          // VX += NN
+                let x = digit2 as usize;
+                let nn = (op & 0xFF) as u8;
+                self.v_reg[x] = self.v_reg[x].wrapping_add(nn);
+            },
+            (8, _, _, 0)  => {          // VX = VY
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                self.v_reg[x] = self.v_reg[y];
+            },
+            (8, _, _, 1)  => {          // VX | VY
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                self.v_reg[x] |= self.v_reg[y];
+            },
+            (8, _, _, 2)  => {          // VX & VY
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                self.v_reg[x] &= self.v_reg[y];
+            },
+            (8, _, _, 3)  => {          // VX ^ VY
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                self.v_reg[x] ^= self.v_reg[y];
+            },
+            (8, _, _, 4)  => {          // VX += VY with v_reg 16 flag overflow
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                let (new_vx, carry) = self.v_reg[x].overflowing_add(self.v_reg[y]);
+                let new_vf = if carry { 1 } else { 0 };
+
+                self.v_reg[x] = new_vx;
+                self.v_reg[0xF] = new_vf;
+            },
+            (8, _, _, 5)  => {          // VX -= VY with v_reg 16 flag overflow
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                let (new_vx, borrow) = self.v_reg[x].overflowing_sub(self.v_reg[y]);
+                let new_vf = if borrow { 1 } else { 0 };
+
+                self.v_reg[x] = new_vx;
+                self.v_reg[0xF] = new_vf;
+            },
+            (8, _, _, 6)  => {          // bitshift right
+                let x = digit2 as usize;
+                let lsb = self.v_reg[x] & 1;
+
+                self.v_reg[x] >>= 1;
+                self.v_reg[0xF] = lsb;
+            },
+            (8, _, _, 7)  => {          // VX = VY - VX
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                let (new_vx, borrow) = self.v_reg[y].overflowing_sub(self.v_reg[x]);
+                let new_vf = if borrow { 1 } else { 0 };
+
+                self.v_reg[x] = new_vx;
+                self.v_reg[0xF] = new_vf;
+            },
+            (8, _, _, 0xE)  => {        // VX <<= 1 
+                let x = digit2 as usize;
+                let msb = (self.v_reg[x] >> 7) & 1;
+                self.v_reg[x] <<= 1;
+                self.v_reg[0xF] = msb;
+            },
+            (9, _, _, 0)  => {          // SKIP VX != VY 
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                if self.v_reg[x] != self.v_reg[y] {
+                    self.pc += 2;
+                }
+            },
+            (0xA, _, _, _)  => {        // I = NNN store address pointer to RAM
+                let nnn = op & 0xFFF;
+                self.i_reg = nnn;
+            },
+            (0xB, _, _, _)  => {        // JMP V0 + NNN
+                let nnn = op & 0xFFF;
+                self.pc = (self.v_reg[0] as u16) + nnn;
+            },
+            (0xC, _, _, _)  => {        // RNG & lower 8 bits of the opcode
+                let x = digit2 as usize;
+                let nn = (op & 0xFFF) as u8;
+                let rng: u8 = random();
+                self.v_reg[x] = rng & nn;
+            },
+            (0xD, _, _, _)  => {        // complicado DRAW 
+                // get (x, y) from sprite
+                let x_coord = self.v_reg[digit2 as usize] as u16;
+                let y_coord = self.v_reg[digit3 as usize] as u16;
+                // how high is the sprite is digit4
+                let num_rows = digit4;
+                let mut flipped = false;
+                
+                for y_line in 0..num_rows {
+                    // determine which memory adresss our row's data is stored at
+                    let addr = self.i_reg + y_line as u16;
+                    let pixels = self.ram[addr as usize];
+
+                    for x_line in 0..8 {
+                        // mask to fetch current pixel's bit, only flip if a 1
+                        if (pixels & (0b1000_0000 >> x_line)) != 0 {
+                            // sprite wrap around screen, so apply modulo
+                            let x = (x_coord + y_line) as usize % SCREEN_WIDTH;
+                            let y = (y_coord + y_line) as usize % SCREEN_HEIGHT;
+
+                            let idx = x + SCREEN_WIDTH * y;
+                             
+                            flipped |= self.screen[idx];
+                            self.screen[idx] ^= true;
+                        }
+                    }
+                }
+
+                if flipped {
+                    self.v_reg[0xF] = 1;
+                } else {
+                    self.v_reg[0xF] = 0;
+                }
+            },
             (_, _, _, _) => unimplemented!("Unimplemented opcode: {}", op),
         }
     }
