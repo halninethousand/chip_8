@@ -96,6 +96,42 @@ impl Emulator {
         self.execute(op);
     }
 
+    pub fn tick_timers(&mut self) {
+        if self.dt > 0 {
+            self.dt -= 1;
+        }
+
+        if self.st > 0 {
+            if self.st == 1 {
+                println!("Sound not implemented!");
+            }
+            self.st -= 1;
+        }
+    }
+
+    fn fetch(&mut self) -> u16 {
+        // all opcodes are 2 bytes
+        let higher_byte = self.ram[self.pc as usize] as u16;
+        let lower_byte = self.ram[(self.pc + 1) as usize] as u16;
+        let op = (higher_byte << 8) | lower_byte;
+        self.pc += 2;
+        op
+    }
+
+    pub fn get_display(&self) -> &[bool] {
+        &self.screen
+    }
+
+    pub fn keypress(&mut self, idx: usize, pressed: bool) {
+        self.keys[idx] = pressed;
+    }
+
+    pub fn load(&mut self, data: &[u8]) {
+        let start = START_ADDR as usize;
+        let end = (START_ADDR as usize) + data.len();
+        self.ram[start..end].copy_from_slice(data);
+    }
+
     fn execute(&mut self, op: u16) {
         let digit1 = (op & 0xF000) >> 12;
         let digit2 = (op & 0x0F00) >> 8;
@@ -134,10 +170,10 @@ impl Emulator {
                     self.pc += 2;
                 }
             },
-            (5, _, _, 0)  => {          // SKIP VX == VY
+            (5, _, _, 0)  => {          // SKIP VX == VY (5, _, _, 0)
                 let x = digit2 as usize;
                 let y = digit3 as usize;
-                if self.v_reg[x] != self.v_reg[y] {
+                if self.v_reg[x] == self.v_reg[y] {
                     self.pc += 2;
                 }
             },
@@ -174,6 +210,7 @@ impl Emulator {
             (8, _, _, 4)  => {          // VX += VY with v_reg 16 flag overflow
                 let x = digit2 as usize;
                 let y = digit3 as usize;
+
                 let (new_vx, carry) = self.v_reg[x].overflowing_add(self.v_reg[y]);
                 let new_vf = if carry { 1 } else { 0 };
 
@@ -184,7 +221,7 @@ impl Emulator {
                 let x = digit2 as usize;
                 let y = digit3 as usize;
                 let (new_vx, borrow) = self.v_reg[x].overflowing_sub(self.v_reg[y]);
-                let new_vf = if borrow { 1 } else { 0 };
+                let new_vf = if borrow { 0 } else { 1 };
 
                 self.v_reg[x] = new_vx;
                 self.v_reg[0xF] = new_vf;
@@ -199,8 +236,9 @@ impl Emulator {
             (8, _, _, 7)  => {          // VX = VY - VX
                 let x = digit2 as usize;
                 let y = digit3 as usize;
+
                 let (new_vx, borrow) = self.v_reg[y].overflowing_sub(self.v_reg[x]);
-                let new_vf = if borrow { 1 } else { 0 };
+                let new_vf = if borrow { 0 } else { 1 };
 
                 self.v_reg[x] = new_vx;
                 self.v_reg[0xF] = new_vf;
@@ -228,7 +266,7 @@ impl Emulator {
             },
             (0xC, _, _, _)  => {        // RNG & lower 8 bits of the opcode
                 let x = digit2 as usize;
-                let nn = (op & 0xFFF) as u8;
+                let nn = (op & 0xFF) as u8;
                 let rng: u8 = random();
                 self.v_reg[x] = rng & nn;
             },
@@ -249,7 +287,7 @@ impl Emulator {
                         // mask to fetch current pixel's bit, only flip if a 1
                         if (pixels & (0b1000_0000 >> x_line)) != 0 {
                             // sprite wrap around screen, so apply modulo
-                            let x = (x_coord + y_line) as usize % SCREEN_WIDTH;
+                            let x = (x_coord + x_line) as usize % SCREEN_WIDTH;
                             let y = (y_coord + y_line) as usize % SCREEN_HEIGHT;
 
                             let idx = x + SCREEN_WIDTH * y;
@@ -346,42 +384,6 @@ impl Emulator {
             },
             (_, _, _, _) => unimplemented!("Unimplemented opcode: {}", op),
         }
-    }
-
-    pub fn tick_timers(&mut self) {
-        if self.dt > 0 {
-            self.dt -= 1;
-        }
-
-        if self.st > 0 {
-            if self.st == 1 {
-                println!("Sound not implemented!");
-            }
-            self.st -= 1;
-        }
-    }
-
-    fn fetch(&mut self) -> u16 {
-        // all opcodes are 2 bytes
-        let higher_byte = self.ram[self.pc as usize] as u16;
-        let lower_byte = self.ram[(self.pc + 1) as usize] as u16;
-        let op = (higher_byte << 8) | lower_byte;
-        self.pc += 2;
-        op
-    }
-
-    pub fn get_display(&self) -> &[bool] {
-        &self.screen
-    }
-
-    pub fn keypress(&mut self, idx: usize, pressed: bool) {
-        self.keys[idx] = pressed;
-    }
-
-    pub fn load(&mut self, data: &[u8]) {
-        let start = START_ADDR as usize;
-        let end = (START_ADDR as usize) + data.len();
-        self.ram[start..end].copy_from_slice(data);
     }
 
 }
